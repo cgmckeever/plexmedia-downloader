@@ -10,7 +10,7 @@ open .
 source env/bin/activate
 for url in $LIST
 do
-    echo "Fetching ${url: -20}"
+    echo "Fetching ${url: -40}"
     # main.py prints one "DIR:<folder>" line for the top-level folder it created.
     # It has fully exited by the time we read this, so nothing is writing to
     # that folder and we can safely rename it before the next url.

@@ -246,6 +246,11 @@ class PlexDownloader:
                     for chunk in response.iter_content(chunk_size=4096):
                         fout.write(chunk)
                         pbar.update(len(chunk))
+
+        # Report the top-level folder created so callers (e.g. fetch.sh) can
+        # post-process it once the download is complete.
+        if contents:
+            print("DIR:%s" % contents[0]['folder'].split(os.sep)[0])
         return
 
     def parse_url(self, url):

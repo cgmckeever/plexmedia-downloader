@@ -4,14 +4,29 @@ source config.sh
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 
-LOG="$HERE/downloaded.log"
+LOG_DIR="$HERE/logs"
 LOG_DAYS=30
 
-# Log format: <epoch>\t<YYYY-MM-DD HH:MM>\t<url-key>
-# Purge entries older than LOG_DAYS.
-touch "$LOG"
-cutoff=$(( $(date +%s) - LOG_DAYS * 86400 ))
-awk -F'\t' -v c="$cutoff" '$1 >= c' "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+# One log per day a run happens: logs/YYYY-MM-DD.log
+# Each line: <HH:MM>\t<1-movies|1-television>\t<folder>\t<url-key>
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/$(date +%F).log"
+
+# Purge daily logs older than LOG_DAYS (filenames sort by date).
+cutoff=$(date -v-${LOG_DAYS}d +%F)
+for f in "$LOG_DIR"/????-??-??.log
+do
+    [ -e "$f" ] || continue
+    d=$(basename "$f" .log)
+    [[ "$d" < "$cutoff" ]] && rm -f "$f"
+done
+
+# Print "YYYY-MM-DD HH:MM" of the most recent download of a url key, if any.
+last_download() {
+    local logs=("$LOG_DIR"/????-??-??.log)
+    [ -e "${logs[0]}" ] || return
+    awk -F'\t' -v k="$1" '$4 == k { d = substr(FILENAME, length(FILENAME) - 13, 10) " " $1 } END { print d }' "${logs[@]}"
+}
 
 # Same item can be linked with a different &context=..., so key on the url without it.
 url_key() { echo "${1%%&context=*}"; }
@@ -31,7 +46,7 @@ fetch() {
         for url in $urls
         do
             key=$(url_key "$url")
-            prev=$(awk -F'\t' -v k="$key" '$3 == k { d = $2 } END { print d }' "$LOG")
+            prev=$(last_download "$key")
             if [ -n "$prev" ]
             then
                 read -r -p "Already downloaded ${url: -40} ($prev), re-download (y/N)? " ans < /dev/tty
@@ -59,7 +74,7 @@ fetch() {
                 [ -e "$f" ] && mv "$f" "$new/$new.${f##*.}"
             fi
             # Only log once main.py reported a completed download.
-            [ -n "$root" ] && printf '%s\t%s\t%s\n' "$(date +%s)" "$(date '+%Y-%m-%d %H:%M')" "$key" >> "$LOG"
+            [ -n "$root" ] && printf '%s\t%s\t%s\t%s\n' "$(date +%H:%M)" "$1" "$new" "$key" >> "$LOG"
         done
     )
 }

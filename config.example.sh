@@ -4,4 +4,7 @@ export PLEXPASS='PLEXPASSWORD'
 export PLEXUSER="PLEXUSER"
 
 
-LIST=""
+MOVIES=""
+
+TV="
+"

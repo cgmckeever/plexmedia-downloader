@@ -4,6 +4,18 @@ source config.sh
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 
+LOG="$HERE/downloaded.log"
+LOG_DAYS=30
+
+# Log format: <epoch>\t<YYYY-MM-DD HH:MM>\t<url-key>
+# Purge entries older than LOG_DAYS.
+touch "$LOG"
+cutoff=$(( $(date +%s) - LOG_DAYS * 86400 ))
+awk -F'\t' -v c="$cutoff" '$1 >= c' "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+
+# Same item can be linked with a different &context=..., so key on the url without it.
+url_key() { echo "${1%%&context=*}"; }
+
 IFSO=$IFS
 IFS=$'\n'
 
@@ -18,6 +30,14 @@ fetch() {
         cd "$dest" || exit 1
         for url in $urls
         do
+            key=$(url_key "$url")
+            prev=$(awk -F'\t' -v k="$key" '$3 == k { d = $2 } END { print d }' "$LOG")
+            if [ -n "$prev" ]
+            then
+                read -r -p "Already downloaded ${url: -40} ($prev), re-download (y/N)? " ans < /dev/tty
+                [[ "$ans" =~ ^[Yy]$ ]] || { echo "Skipping"; continue; }
+            fi
+
             echo "Fetching ${url: -40} -> $1"
             # main.py prints one "DIR:<folder>" line for the top-level folder it created.
             # It has fully exited by the time we read this, so nothing is writing to
@@ -38,6 +58,8 @@ fetch() {
                 f=("$new/$root".*)
                 [ -e "$f" ] && mv "$f" "$new/$new.${f##*.}"
             fi
+            # Only log once main.py reported a completed download.
+            [ -n "$root" ] && printf '%s\t%s\t%s\n' "$(date +%s)" "$(date '+%Y-%m-%d %H:%M')" "$key" >> "$LOG"
         done
     )
 }
